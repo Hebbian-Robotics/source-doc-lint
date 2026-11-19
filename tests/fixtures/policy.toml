@@ -1,0 +1,23 @@
+reason = "Code is the primary documentation."
+
+exclude = ["livekit-cameras/**", "**/target/**", "**/node_modules/**", "**/.venv/**"]
+
+[classification]
+labels = ["WHY", "INVARIANT", "CONSTRAINT", "TODO", "SAFETY"]
+exclude = [
+    "**/contracts/**",
+    "**/packages/**",
+    "**/typings/**",
+    "**/examples/**",
+    "**/typescript-client/**",
+    "**/hebbian_rua/**",
+    "**/sdk/**",
+    "**/generated/**",
+    "**/station_api.py",
+    "**/http_routes.py",
+    "**/arm_commands.py",
+    "**/generated_robot_tools.py",
+]
+
+[public_interface]
+directories = ["contracts", "sdk"]

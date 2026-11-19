@@ -1,0 +1,117 @@
+[
+  {
+    "name": "py-module",
+    "extension": "py",
+    "source": "\"\"\"Module docs.\"\"\"\nvalue = 1\n",
+    "findings": 1
+  },
+  {
+    "name": "py-comment-before",
+    "extension": "py",
+    "source": "# WHY: Reason.\n\"\"\"Module docs.\"\"\"\n",
+    "findings": 1
+  },
+  {
+    "name": "py-function",
+    "extension": "py",
+    "source": "def f():\n    \"\"\"Docs.\"\"\"\n    return 1\n",
+    "findings": 1
+  },
+  {
+    "name": "py-async-nested",
+    "extension": "py",
+    "source": "class A:\n    async def f(self):\n        \"\"\"Docs.\"\"\"\n        return 1\n",
+    "findings": 1
+  },
+  {
+    "name": "py-class",
+    "extension": "py",
+    "source": "class A:\n    \"\"\"Docs.\"\"\"\n    x = 1\n",
+    "findings": 1
+  },
+  {
+    "name": "py-ordinary-string",
+    "extension": "py",
+    "source": "def f():\n    value = 1\n    \"\"\"Not docs.\"\"\"\n    return value\n",
+    "findings": 0
+  },
+  {
+    "name": "py-assigned-string",
+    "extension": "py",
+    "source": "TEXT = \"\"\"Not docs.\"\"\"\n",
+    "findings": 0
+  },
+  {
+    "name": "rust-outer",
+    "extension": "rs",
+    "source": "/// Docs.\nfn f() {}\n",
+    "findings": 1
+  },
+  {
+    "name": "rust-inner",
+    "extension": "rs",
+    "source": "//! Docs.\n",
+    "findings": 1
+  },
+  {
+    "name": "rust-block",
+    "extension": "rs",
+    "source": "/** Docs. */\nfn f() {}\n",
+    "findings": 1
+  },
+  {
+    "name": "rust-ordinary",
+    "extension": "rs",
+    "source": "// WHY: Reason.\nfn f() {}\n",
+    "findings": 0
+  },
+  {
+    "name": "ts-jsdoc",
+    "extension": "ts",
+    "source": "/** Docs. */\nexport const a = 1;\n",
+    "findings": 1
+  },
+  {
+    "name": "ts-ordinary",
+    "extension": "ts",
+    "source": "// WHY: Reason.\nexport const a = 1;\n",
+    "findings": 0
+  },
+  {
+    "name": "tsx-jsdoc",
+    "extension": "tsx",
+    "source": "/** Docs. */\nexport const a = <div />;\n",
+    "findings": 1
+  },
+  {
+    "name": "generated-ts",
+    "extension": "ts",
+    "source": "/** Docs. */\nexport const a = 1;\n",
+    "findings": 1,
+    "directory": "generated"
+  },
+  {
+    "name": "py-concatenated-docstring",
+    "extension": "py",
+    "source": "\"Docs \" \"continued.\"\n",
+    "findings": 1
+  },
+  {
+    "name": "py-f-string-not-docstring",
+    "extension": "py",
+    "source": "f\"Runtime {value}\"\n",
+    "findings": 0
+  },
+  {
+    "name": "py-bytes-not-docstring",
+    "extension": "py",
+    "source": "b\"Runtime bytes\"\n",
+    "findings": 0
+  },
+  {
+    "name": "py-nested-concatenation",
+    "extension": "py",
+    "source": "class A:\n    def method(self):\n        (\"Docs \"\n         \"continued.\")\n        return 1\n",
+    "findings": 1
+  }
+]

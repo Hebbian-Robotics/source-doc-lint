@@ -1,0 +1,200 @@
+[
+  {
+    "name": "pydantic-field",
+    "extension": "py",
+    "source": "from pydantic import Field\nx = Field(description=\"Docs\")\n",
+    "findings": 1
+  },
+  {
+    "name": "pydantic-qualified-alias",
+    "extension": "py",
+    "source": "import pydantic as models\nx = models.Field(description=\"Docs\")\n",
+    "findings": 1
+  },
+  {
+    "name": "pydantic-field-alias",
+    "extension": "py",
+    "source": "from pydantic import Field as F\nx = F(description=\"Docs\")\n",
+    "findings": 1
+  },
+  {
+    "name": "pydantic-config-alias",
+    "extension": "py",
+    "source": "from pydantic import ConfigDict as C\nx = C(json_schema_extra={\"description\": \"Docs\", \"title\": \"Name\"})\n",
+    "findings": 1
+  },
+  {
+    "name": "pydantic-qualified-config",
+    "extension": "py",
+    "source": "import pydantic\nx = pydantic.ConfigDict(json_schema_extra={\"description\": \"Docs\"})\n",
+    "findings": 1
+  },
+  {
+    "name": "pydantic-field-extra",
+    "extension": "py",
+    "source": "from pydantic import Field\nx = Field(json_schema_extra={\"description\": \"Docs\"})\n",
+    "findings": 1
+  },
+  {
+    "name": "pydantic-nested-import",
+    "extension": "py",
+    "source": "def factory():\n    from pydantic import Field as F\n    return F(description=\"Docs\")\n",
+    "findings": 1
+  },
+  {
+    "name": "pydantic-unrelated-field",
+    "extension": "py",
+    "source": "from dataclasses import field as Field\nx = Field(description=\"Application data\")\n",
+    "findings": 0
+  },
+  {
+    "name": "pydantic-shadowed-field",
+    "extension": "py",
+    "source": "from pydantic import Field\ndef helper(Field):\n    return Field(description=\"Application data\")\n",
+    "findings": 0
+  },
+  {
+    "name": "pydantic-null-description",
+    "extension": "py",
+    "source": "from pydantic import Field\nx = Field(description=None)\n",
+    "findings": 0
+  },
+  {
+    "name": "pydantic-unrelated-extra",
+    "extension": "py",
+    "source": "from pydantic import ConfigDict\nx = ConfigDict(json_schema_extra={\"examples\": [{\"description\": \"Application data\"}]})\n",
+    "findings": 0
+  },
+  {
+    "name": "cli-description",
+    "extension": "py",
+    "source": "import argparse\nx = argparse.ArgumentParser(description=\"Help\")\n",
+    "findings": 0
+  },
+  {
+    "name": "rust-description-attribute",
+    "extension": "rs",
+    "source": "#[schemars(description = \"Docs\")]\nstruct A;\n",
+    "findings": 1
+  },
+  {
+    "name": "rust-mixed-attributes",
+    "extension": "rs",
+    "source": "#[schemars(rename = \"A\", description = \"Docs\", title = \"Title\")]\nstruct A;\n",
+    "findings": 1
+  },
+  {
+    "name": "rust-title-not-description",
+    "extension": "rs",
+    "source": "#[schemars(title = \"description = application data\")]\nstruct A;\n",
+    "findings": 0
+  },
+  {
+    "name": "rust-unrelated-attribute",
+    "extension": "rs",
+    "source": "#[application(description = \"Runtime data\")]\nstruct A;\n",
+    "findings": 0
+  },
+  {
+    "name": "rust-doc-attribute",
+    "extension": "rs",
+    "source": "#[doc = \"Docs\"]\nstruct A;\n",
+    "findings": 1
+  },
+  {
+    "name": "rust-doc-hidden",
+    "extension": "rs",
+    "source": "#[doc(hidden)]\nstruct A;\n",
+    "findings": 0
+  },
+  {
+    "name": "zod-description",
+    "extension": "ts",
+    "source": "import { z } from \"zod\";\nconst schema = z.string().describe(\"Docs\");\n",
+    "findings": 1
+  },
+  {
+    "name": "zod-import-alias",
+    "extension": "ts",
+    "source": "import { z as schema } from \"zod/v4\";\nconst value = schema.string().describe(\"Docs\");\n",
+    "findings": 1
+  },
+  {
+    "name": "zod-namespace",
+    "extension": "ts",
+    "source": "import * as schema from \"zod\";\nconst value = schema.object({}).describe(\"Docs\");\n",
+    "findings": 1
+  },
+  {
+    "name": "zod-named-factory",
+    "extension": "ts",
+    "source": "import { string as text } from \"zod\";\nconst value = text().describe(\"Docs\");\n",
+    "findings": 1
+  },
+  {
+    "name": "zod-variable-alias",
+    "extension": "ts",
+    "source": "import { z } from \"zod\";\nconst original = z.string();\nconst alias = original;\nalias.describe(\"Docs\");\n",
+    "findings": 1
+  },
+  {
+    "name": "zod-meta",
+    "extension": "tsx",
+    "source": "import { z } from \"zod\";\nconst schema = z.string().meta({ description: \"Docs\" });\n",
+    "findings": 1
+  },
+  {
+    "name": "zod-meta-const",
+    "extension": "ts",
+    "source": "import { z } from \"zod\";\nconst metadata = { title: \"Title\", description: \"Docs\" };\nconst schema = z.string().meta(metadata);\n",
+    "findings": 1
+  },
+  {
+    "name": "zod-meta-const-tsx",
+    "extension": "tsx",
+    "source": "import { z } from \"zod\";\nfunction build() {\n  const metadata = { \"description\": \"Docs\" };\n  return z.string().meta(metadata);\n}\n",
+    "findings": 1
+  },
+  {
+    "name": "zod-meta-const-without-description",
+    "extension": "ts",
+    "source": "import { z } from \"zod\";\nconst metadata = { title: \"Title\", nested: { description: \"Nested\" } };\nconst schema = z.string().meta(metadata);\n",
+    "findings": 0
+  },
+  {
+    "name": "unrelated-meta-const",
+    "extension": "ts",
+    "source": "const metadata = { description: \"Docs\" };\nregistry.meta(metadata);\n",
+    "findings": 0
+  },
+  {
+    "name": "zod-meta-const-shadowed",
+    "extension": "ts",
+    "source": "import { z } from \"zod\";\nconst metadata = { description: \"Docs\" };\nconst build = (metadata: { title: string }) => z.string().meta(metadata);\n",
+    "findings": 0
+  },
+  {
+    "name": "zod-meta-extra",
+    "extension": "ts",
+    "source": "import { z } from \"zod\";\nconst schema = z.string().meta({ title: \"Title\", description: \"Docs\", examples: [] });\n",
+    "findings": 1
+  },
+  {
+    "name": "unrelated-describe",
+    "extension": "ts",
+    "source": "const app = service();\napp.describe(\"Runtime data\");\n",
+    "findings": 0
+  },
+  {
+    "name": "unrelated-describe-with-zod",
+    "extension": "tsx",
+    "source": "import { z } from \"zod\";\nconst schema = z.string();\nconst app = service();\napp.describe(\"Runtime data\");\n",
+    "findings": 0
+  },
+  {
+    "name": "unrelated-zod-function",
+    "extension": "ts",
+    "source": "import { z } from \"zod\";\nz.toJSONSchema(schema).describe(\"Runtime data\");\n",
+    "findings": 0
+  }
+]
