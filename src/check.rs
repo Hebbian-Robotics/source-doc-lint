@@ -148,7 +148,7 @@ pub fn check_source(
             let span = node.range();
             let (line, column) = node.start_pos().byte_point();
             let indentation = &text[span.start - column..span.start];
-            let standalone = (comment.starts_with("//") || comment.starts_with("#"))
+            let standalone = (comment.starts_with("//") || comment.starts_with('#'))
                 && indentation.bytes().all(|byte| matches!(byte, b' ' | b'\t'));
             let continues_group = standalone
                 && previous_standalone

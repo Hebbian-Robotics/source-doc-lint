@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "The CLI tests fail immediately when fixture setup or report parsing fails."
+)]
+
 use std::{
     collections::HashMap,
     fs,

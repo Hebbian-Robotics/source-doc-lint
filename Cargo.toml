@@ -22,3 +22,45 @@ toml = "1.2.1"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+needless_pass_by_value = "allow"
+unnecessary_wraps = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+unreachable = "warn"
+needless_pass_by_ref_mut = "warn"
+excessive_nesting = "warn"
+todo = "deny"
+unimplemented = "deny"
+
+# Build profiles.
+# NOTE: Cargo only honours [profile.*] in the WORKSPACE-ROOT Cargo.toml. If you
+# are initialising a workspace member, move these two tables to the root
+# manifest (Cargo prints a warning and ignores them in member crates).
+
+# Thin debug info: keep stack traces and panic locations but drop variable-level
+# detail. Cuts target/ size ~50-70% with no practical downside for day-to-day
+# development. Set `debug = true` per-project if you need a full interactive
+# debugger (variable inspection, etc.).
+[profile.dev]
+debug = "line-tables-only"
+
+# Aggressive release tuning for shipped binaries.
+#   lto = true          full cross-crate inlining
+#   codegen-units = 1   whole-program view for the optimiser (slower to compile,
+#                       faster + smaller output)
+#   strip = true        drop symbols
+#   panic = "abort"     remove unwinding tables to shrink further
+# CAVEAT: panic = "abort" disables std::panic::catch_unwind and
+# `cargo test --release`. Plain `cargo test` still works (it builds under
+# [profile.test], which keeps unwinding). If a crate relies on unwinding,
+# override panic per-project.
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

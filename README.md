@@ -91,13 +91,6 @@ Rust `cfg_attr` and Schemars `extend` are outside the supported syntax.
 Ordinary application descriptions, CLI help, and unrelated methods named
 `describe` are outside the schema rules.
 
-## Develop
+## Contribute
 
-```sh
-cargo fmt --check
-cargo clippy --locked --all-targets --all-features -- -D warnings
-cargo test --locked --all-features
-```
-
-The command-line fixtures cover the supported source forms, policy selection,
-path boundaries, and exit codes.
+See [Contributing](CONTRIBUTING.md) for setup, checks, and how to report bugs.

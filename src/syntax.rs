@@ -44,6 +44,10 @@ impl Language {
         }
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "The directive patterns are fixed literals owned by the CLI."
+    )]
     pub fn is_directive(self, comment: &str) -> bool {
         static PYTHON: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(r"^#\s*(!|noqa\b|type:\s*ignore\b|ty:\s*ignore\b|ruff:|fmt:|pragma:|coding[:=]|SPDX-License-Identifier:|Copyright\b|copyright\b)").expect("valid Python directive pattern")
@@ -88,9 +92,13 @@ pub fn is_comment(node: &SyntaxNode<'_>) -> bool {
 }
 
 pub fn is_ordinary_comment(language: Language, node: &SyntaxNode<'_>) -> bool {
-    is_comment(node)
-        && !language.is_doc_comment(&node.text())
-        && !(matches!(language, Language::Rust) && node.text().starts_with("/***"))
-        && !(matches!(language, Language::TypeScript | Language::Tsx)
-            && node.text().starts_with("/**"))
+    if !is_comment(node) {
+        return false;
+    }
+    let comment = node.text();
+    match language {
+        Language::Python => true,
+        Language::Rust => !language.is_doc_comment(&comment) && !comment.starts_with("/***"),
+        Language::TypeScript | Language::Tsx => !comment.starts_with("/**"),
+    }
 }
