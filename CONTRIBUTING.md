@@ -49,3 +49,10 @@ each platform. On Linux, contributors can opt into mold by setting
 
 - **Verbose naming**: Variable and function naming should read like documentation
 - **Strategic comments**: Only for non-obvious logic or architectural decisions; avoid restating what code shows
+
+## Release
+
+Update the version in `Cargo.toml` and refresh `Cargo.lock` before creating a
+matching `vX.Y.Z` tag. The release workflow tests and packages each supported
+target. The updater uses the release version and the archive for its exact
+Rust target.

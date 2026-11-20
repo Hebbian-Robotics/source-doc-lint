@@ -37,6 +37,7 @@ jobs:
           cp LICENSE package/
           binary=source-doc-lint
           if [[ "$TARGET" == *windows* ]]; then binary=source-doc-lint.exe; fi
+          test "$("target/$TARGET/release/$binary" --version)" = "source-doc-lint ${GITHUB_REF_NAME#v}"
           cp "target/$TARGET/release/$binary" package/
           tar -czf "source-doc-lint-$TARGET.tar.gz" -C package "$binary" LICENSE
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

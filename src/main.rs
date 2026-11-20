@@ -1,6 +1,7 @@
 mod check;
 mod policy;
 mod syntax;
+mod update;
 
 use std::{
     fs,
@@ -10,7 +11,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use ignore::WalkBuilder;
 use serde::Serialize;
 
@@ -23,6 +24,7 @@ use crate::{
 #[derive(Parser)]
 #[command(
     version,
+    args_conflicts_with_subcommands = true,
     about = "Check source comments and documentation against project policy"
 )]
 struct Arguments {
@@ -35,6 +37,18 @@ struct Arguments {
     json: bool,
     #[arg(default_value = ".")]
     paths: Vec<PathBuf>,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Update a directly installed Source Doc Lint executable.
+    Update {
+        /// Report whether an update is available without installing it.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Serialize)]
@@ -186,7 +200,12 @@ fn run(arguments: Arguments) -> Result<ExitCode> {
 }
 
 fn main() -> ExitCode {
-    match run(Arguments::parse()) {
+    let arguments = Arguments::parse();
+    let outcome = match arguments.command {
+        Some(Command::Update { check }) => update::run(check).map(|()| ExitCode::SUCCESS),
+        None => run(arguments),
+    };
+    match outcome {
         Ok(exit) => exit,
         Err(error) => {
             eprintln!("{error:#}");

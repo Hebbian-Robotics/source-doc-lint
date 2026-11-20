@@ -6,11 +6,17 @@ libraries to inspect syntax.
 
 ## Install and run
 
-Install the release from source with Cargo and a C compiler:
+Download your platform archive from [GitHub Releases], extract it, and put
+`source-doc-lint` on your PATH. If you prefer a source build, use Cargo and a
+C compiler:
 
 ```sh
 cargo install --git https://github.com/Hebbian-Robotics/source-doc-lint --tag v0.1.0 --locked
 ```
+
+For a directly installed release binary, run `source-doc-lint update --check`
+to check for a new version, or `source-doc-lint update` to download, verify,
+and install it. Use the original installation tool for a managed copy.
 
 Run from the directory containing `source-doc-lint.toml`:
 
@@ -24,6 +30,7 @@ Use `--config PATH` to select a different config file. Policy paths are relative
 to the directory containing that file. Scan paths are relative to the working
 directory and default to the current directory. Hidden source files are
 included. The scanner respects Git and ignore files and skips symlink entries.
+To scan a path named `update`, pass it as `./update`.
 
 The exit code is 0 for a clean scan, 1 for violations, and 2 for a tool or
 configuration error. JSON reports contain `reason` and `findings`, with `error`
@@ -94,3 +101,5 @@ Ordinary application descriptions, CLI help, and unrelated methods named
 ## Contribute
 
 See [Contributing](CONTRIBUTING.md) for setup, checks, and how to report bugs.
+
+[GitHub Releases]: https://github.com/Hebbian-Robotics/source-doc-lint/releases

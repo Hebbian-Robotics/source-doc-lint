@@ -193,3 +193,24 @@ extra_directives = ["^# custom-tool:"]
     assert!(report.error.unwrap().contains("classification.labels"));
     assert!(report.findings.is_empty());
 }
+
+#[test]
+fn exposes_update_help_and_keeps_paths_named_update_scannable() {
+    let project = tempdir().unwrap();
+    let lint = env!("CARGO_BIN_EXE_source-doc-lint");
+    let help = Command::new(lint)
+        .current_dir(project.path())
+        .args(["update", "--help"])
+        .output()
+        .expect("show update help");
+    assert!(help.status.success());
+    assert!(String::from_utf8_lossy(&help.stdout).contains("--check"));
+
+    fs::create_dir(project.path().join("update")).unwrap();
+    fs::write(project.path().join("update/lib.rs"), "fn main() {}").unwrap();
+    assert!(
+        read_report(&check(project.path(), &["./update"]), 0)
+            .findings
+            .is_empty()
+    );
+}
