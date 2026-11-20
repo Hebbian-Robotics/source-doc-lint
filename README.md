@@ -90,6 +90,11 @@ kinds = ["docstring", "doc-comment", "doc-attribute", "schema-description"]
   function-local imports. Parameter and assignment shadowing suppress uncertain
   bindings. Python semantic checks use the RustPython parser. Syntax it cannot
   parse causes a tool error when those checks are enabled.
+- Python files are supported up to 383 distinct indentation widths whenever a
+  rule checks them. Python semantic checks also support up to 1,024 levels of
+  nesting, where a level is a statement inside a compound statement, an `elif`
+  clause, an expression inside an expression, or a pattern inside a pattern.
+  Deeper files cause a nesting-depth tool error that names the file.
 
 Schema detection is file-local. It does not resolve dynamic imports,
 re-exports, wrapper functions, computed or spread metadata, Python assignment

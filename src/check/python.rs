@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use rustpython_ast::{
     self as ast, Constant, Expr, ExprContext, Ranged, Stmt, Visitor, text_size::TextRange,
 };
@@ -226,13 +226,76 @@ impl Visitor for PythonDocumentation {
     }
 }
 
-/// rustpython parses without recursion but clones, visits, and drops its tree recursively,
-/// so the nesting it will build is bounded before it parses. The tree-sitter tree nests at
-/// least as deeply, except that rustpython nests each `elif` inside the previous clause and
-/// error recovery can leave tokens flat, so those siblings count as successive levels.
-const MAX_SYNTAX_DEPTH: usize = 128;
+/// Deepest supported Python nesting. One level is one syntax node that rustpython nests
+/// inside its parent: a statement inside a compound statement, an expression inside an
+/// expression, or a pattern inside a pattern. Deeper files are a tool error, because
+/// rustpython clones, visits, and drops its tree recursively.
+const MAX_SYNTAX_DEPTH: usize = 1024;
 
-fn ensure_bounded_nesting(root: &SyntaxNode<'_>) -> Result<()> {
+/// Reserved stack for rustpython, so the supported depth does not depend on the platform's
+/// main-thread stack. `MAX_SYNTAX_DEPTH` chained `elif` clauses, the deepest-framed syntax,
+/// need under 8 MiB in unoptimized builds.
+const ANALYSIS_STACK_BYTES: usize = 64 * 1024 * 1024;
+
+/// Tree-sitter wrappers that rustpython stores as a field or list of the enclosing node,
+/// so they add no nesting of their own.
+const TRANSPARENT_KINDS: &[&str] = &[
+    "block",
+    "argument_list",
+    "parenthesized_expression",
+    "case_pattern",
+    "pair",
+];
+
+/// tree-sitter-python 0.25.0 serializes each open indentation level as two bytes after up
+/// to 257 bytes of string state, and aborts the process once that passes 1024 bytes. Open
+/// levels have distinct widths, so files with at most this many widths stay in bounds.
+const MAX_INDENTATION_WIDTHS: usize = 383;
+
+/// Measures indentation as the tree-sitter-python scanner does: spaces add one, tabs add
+/// eight, carriage returns and form feeds reset, and a backslash continuation keeps counting.
+pub(super) fn ensure_scannable_indentation(source: &str) -> Result<()> {
+    let bytes = source.as_bytes();
+    let mut widths = HashSet::new();
+    let mut indentation = Some(0_u16);
+    let mut line = 0;
+    let mut offset = 0;
+    while let Some(&byte) = bytes.get(offset) {
+        offset += 1;
+        match byte {
+            b'\n' => {
+                line += 1;
+                indentation = Some(0);
+            }
+            b' ' | b'\t' | b'\r' | b'\x0c' => {
+                if let Some(width) = &mut indentation {
+                    *width = match byte {
+                        b' ' => width.wrapping_add(1),
+                        b'\t' => width.wrapping_add(8),
+                        _ => 0,
+                    };
+                }
+            }
+            b'\\' if bytes[offset..].starts_with(b"\n") || bytes[offset..].starts_with(b"\r\n") => {
+                offset += if bytes[offset] == b'\r' { 2 } else { 1 };
+                line += 1;
+            }
+            _ => {
+                if let Some(width) = indentation.take().filter(|&width| width > 0) {
+                    widths.insert(width);
+                    ensure!(
+                        widths.len() <= MAX_INDENTATION_WIDTHS,
+                        "Python indentation at line {} exceeds the nesting depth limit of {MAX_INDENTATION_WIDTHS} distinct indentation widths",
+                        line + 1
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn ensure_supported_nesting(root: &SyntaxNode<'_>) -> Result<()> {
     let mut pending = vec![(root.clone(), 0)];
     while let Some((node, depth)) = pending.pop() {
         ensure!(
@@ -240,17 +303,31 @@ fn ensure_bounded_nesting(root: &SyntaxNode<'_>) -> Result<()> {
             "Python syntax at line {} exceeds the nesting depth limit of {MAX_SYNTAX_DEPTH}",
             node.start_pos().line() + 1
         );
+        // rustpython nests each `elif` inside the previous clause, and error recovery can
+        // leave tokens flat that rustpython nests, so those siblings count as successive levels.
         let chains_every_child = node.is_error();
-        let mut child_depth = depth + 1;
+        let mut sibling_offset = 0;
         for child in node.children() {
             let nests_following = chains_every_child || child.kind() == "elif_clause";
-            pending.push((child, child_depth));
+            let level = usize::from(!TRANSPARENT_KINDS.contains(&child.kind().as_ref()));
+            pending.push((child, depth + sibling_offset + level));
             if nests_following {
-                child_depth += 1;
+                sibling_offset += 1;
             }
         }
     }
     Ok(())
+}
+
+fn analyze(source: &str, kinds: &[DocumentationKind]) -> Result<Vec<Documentation>> {
+    let body = ast::Suite::parse(source, "source")?;
+    let mut visitor = PythonDocumentation {
+        scopes: Vec::new(),
+        detected: Vec::new(),
+        kinds: kinds.to_vec(),
+    };
+    visitor.visit_body(body, Bindings::default());
+    Ok(visitor.detected)
 }
 
 pub(super) fn detect(
@@ -266,13 +343,15 @@ pub(super) fn detect(
     }) {
         return Ok(Vec::new());
     }
-    ensure_bounded_nesting(root)?;
-    let body = ast::Suite::parse(source, "source")?;
-    let mut visitor = PythonDocumentation {
-        scopes: Vec::new(),
-        detected: Vec::new(),
-        kinds: kinds.to_vec(),
-    };
-    visitor.visit_body(body, Bindings::default());
-    Ok(visitor.detected)
+    ensure_supported_nesting(root)?;
+    std::thread::scope(|scope| {
+        let analysis = std::thread::Builder::new()
+            .name("python-analysis".into())
+            .stack_size(ANALYSIS_STACK_BYTES)
+            .spawn_scoped(scope, || analyze(source, kinds))
+            .context("starting Python analysis")?;
+        analysis
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+    })
 }

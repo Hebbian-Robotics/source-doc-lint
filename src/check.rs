@@ -127,6 +127,9 @@ pub fn check_source(
             .chain(text.match_indices('\n').map(|(offset, _)| offset + 1))
             .collect(),
     };
+    if matches!(language, Language::Python) {
+        python::ensure_scannable_indentation(text)?;
+    }
     let parsed = language.parser().ast_grep(text);
     let root = parsed.root();
     let mut findings = Vec::new();
@@ -196,7 +199,7 @@ pub fn check_source(
             Language::TypeScript | Language::Tsx
                 if kinds.contains(&DocumentationKind::SchemaDescription) =>
             {
-                typescript::detect(&root).context("detecting TypeScript schema descriptions")?
+                typescript::detect(&root)
             }
             Language::TypeScript | Language::Tsx => Vec::new(),
         };
