@@ -194,6 +194,122 @@ extra_directives = ["^# custom-tool:"]
     assert!(report.findings.is_empty());
 }
 
+/// Ordinary Zod chains stay under this length. The scan has to finish them.
+const ACCEPTABLE_RECEIVER_LINKS: usize = 48;
+/// Long enough to overflow `recognizes` on the main thread in debug and release.
+const STACK_OVERFLOW_RECEIVER_LINKS: usize = 250_000;
+
+fn public_interface_project() -> tempfile::TempDir {
+    let project = tempdir().unwrap();
+    fs::write(
+        project.path().join("source-doc-lint.toml"),
+        "[public_interface]\ndirectories = [\"contracts\"]\n",
+    )
+    .unwrap();
+    project
+}
+
+fn write_chain(root: &Path, relative: &str, prefix: &str, link: &str, links: usize, suffix: &str) {
+    let path = root.join(relative);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut source = String::with_capacity(prefix.len() + link.len() * links + suffix.len());
+    source.push_str(prefix);
+    source.push_str(&link.repeat(links));
+    source.push_str(suffix);
+    fs::write(path, source).unwrap();
+}
+
+fn assert_clean_scan(root: &Path, relative: &str) {
+    let report = read_report(&check(root, &[relative]), 0);
+    assert!(report.error.is_none(), "{relative}");
+    assert!(report.findings.is_empty(), "{relative}");
+}
+
+fn assert_receiver_depth_error(root: &Path, relative: &str) {
+    let output = check(root, &[relative]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Report = serde_json::from_slice(&output.stdout).expect("JSON report");
+    let error = report.error.expect("tool error");
+    assert!(
+        error.contains("receiver depth"),
+        "tool error must report the receiver depth limit, got {error}"
+    );
+    assert!(
+        error.contains(Path::new(relative).file_name().unwrap().to_str().unwrap()),
+        "{error}"
+    );
+    assert!(report.findings.is_empty(), "{}", report.findings.len());
+}
+
+fn assert_chain_limit(relative: &str, prefix: &str, link: &str, suffix: &str) {
+    let project = public_interface_project();
+    let root = project.path();
+    write_chain(
+        root,
+        relative,
+        prefix,
+        link,
+        ACCEPTABLE_RECEIVER_LINKS,
+        suffix,
+    );
+    assert_clean_scan(root, relative);
+    write_chain(
+        root,
+        relative,
+        prefix,
+        link,
+        STACK_OVERFLOW_RECEIVER_LINKS,
+        suffix,
+    );
+    assert_receiver_depth_error(root, relative);
+}
+
+#[test]
+fn schema_receiver_depth_property_initializer_is_a_tool_error() {
+    assert_chain_limit("src/property.ts", "const schema = base", ".a", ";\n");
+}
+
+#[test]
+fn schema_receiver_depth_call_initializer_is_a_tool_error() {
+    assert_chain_limit("src/calls.ts", "const schema = base", ".m()", ";\n");
+}
+
+#[test]
+fn schema_receiver_depth_describe_receiver_is_a_tool_error() {
+    assert_chain_limit("src/describe.ts", "base", ".a", ".describe(\"text\");\n");
+}
+
+#[test]
+fn schema_receiver_depth_meta_receiver_is_a_tool_error() {
+    assert_chain_limit(
+        "src/meta.ts",
+        "base",
+        ".a",
+        ".meta({ description: \"text\" });\n",
+    );
+}
+
+#[test]
+fn schema_receiver_depth_tsx_property_initializer_is_a_tool_error() {
+    assert_chain_limit(
+        "src/view.tsx",
+        "const schema = base",
+        ".a",
+        ";\nexport const View = () => null;\n",
+    );
+}
+
 #[test]
 fn exposes_update_help_and_keeps_paths_named_update_scannable() {
     let project = tempdir().unwrap();
