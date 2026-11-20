@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use rustpython_ast::{
     self as ast, Constant, Expr, ExprContext, Ranged, Stmt, Visitor, text_size::TextRange,
 };
 use rustpython_parser::Parse;
 
 use super::Documentation;
-use crate::policy::DocumentationKind;
+use crate::{policy::DocumentationKind, syntax::SyntaxNode};
 
 type Names = HashMap<String, Option<String>>;
 
@@ -226,7 +226,38 @@ impl Visitor for PythonDocumentation {
     }
 }
 
-pub(super) fn detect(source: &str, kinds: &[DocumentationKind]) -> Result<Vec<Documentation>> {
+/// rustpython parses without recursion but clones, visits, and drops its tree recursively,
+/// so the nesting it will build is bounded before it parses. The tree-sitter tree nests at
+/// least as deeply, except that rustpython nests each `elif` inside the previous clause and
+/// error recovery can leave tokens flat, so those siblings count as successive levels.
+const MAX_SYNTAX_DEPTH: usize = 128;
+
+fn ensure_bounded_nesting(root: &SyntaxNode<'_>) -> Result<()> {
+    let mut pending = vec![(root.clone(), 0)];
+    while let Some((node, depth)) = pending.pop() {
+        ensure!(
+            depth <= MAX_SYNTAX_DEPTH,
+            "Python syntax at line {} exceeds the nesting depth limit of {MAX_SYNTAX_DEPTH}",
+            node.start_pos().line() + 1
+        );
+        let chains_every_child = node.is_error();
+        let mut child_depth = depth + 1;
+        for child in node.children() {
+            let nests_following = chains_every_child || child.kind() == "elif_clause";
+            pending.push((child, child_depth));
+            if nests_following {
+                child_depth += 1;
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn detect(
+    root: &SyntaxNode<'_>,
+    source: &str,
+    kinds: &[DocumentationKind],
+) -> Result<Vec<Documentation>> {
     if !kinds.iter().any(|kind| {
         matches!(
             kind,
@@ -235,6 +266,7 @@ pub(super) fn detect(source: &str, kinds: &[DocumentationKind]) -> Result<Vec<Do
     }) {
         return Ok(Vec::new());
     }
+    ensure_bounded_nesting(root)?;
     let body = ast::Suite::parse(source, "source")?;
     let mut visitor = PythonDocumentation {
         scopes: Vec::new(),

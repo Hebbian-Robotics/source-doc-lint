@@ -190,13 +190,13 @@ pub fn check_source(
             }
         }
         let detected = match language {
-            Language::Python => python::detect(text, kinds)
+            Language::Python => python::detect(&root, text, kinds)
                 .context("parsing Python documentation and schema declarations")?,
             Language::Rust => rust_attributes(&root, kinds),
             Language::TypeScript | Language::Tsx
                 if kinds.contains(&DocumentationKind::SchemaDescription) =>
             {
-                typescript::detect(&root)
+                typescript::detect(&root).context("detecting TypeScript schema descriptions")?
             }
             Language::TypeScript | Language::Tsx => Vec::new(),
         };

@@ -1,7 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
+use anyhow::{Result, bail};
+
 use super::Documentation;
 use crate::{policy::DocumentationKind, syntax::SyntaxNode};
+
+/// Zod chains stay far shorter than this. Longer receiver chains are rejected so a
+/// hostile initializer cannot make schema detection unbounded.
+const MAX_RECEIVER_DEPTH: usize = 256;
 
 const FACTORIES: &[&str] = &[
     "string",
@@ -101,31 +107,61 @@ impl ZodBindings {
         }
     }
 
-    fn recognizes(&self, expression: &SyntaxNode<'_>) -> bool {
+    fn recognizes(&self, expression: &SyntaxNode<'_>) -> Result<bool> {
+        let mut receiver = expression.clone();
+        for _ in 0..=MAX_RECEIVER_DEPTH {
+            match self.next_receiver(&receiver) {
+                ReceiverStep::Resolved(recognized) => return Ok(recognized),
+                ReceiverStep::Descend(next) => receiver = next,
+            }
+        }
+        bail!(
+            "schema receiver chain at line {} exceeds the receiver depth limit of {MAX_RECEIVER_DEPTH}",
+            expression.start_pos().line() + 1
+        )
+    }
+
+    fn next_receiver<'source>(&self, expression: &SyntaxNode<'source>) -> ReceiverStep<'source> {
         match expression.kind().as_ref() {
-            "identifier" => self.schemas.contains(expression.text().as_ref()),
+            "identifier" => {
+                ReceiverStep::Resolved(self.schemas.contains(expression.text().as_ref()))
+            }
             "member_expression" => expression
                 .field("object")
-                .is_some_and(|object| self.recognizes(&object)),
+                .map_or(ReceiverStep::Resolved(false), ReceiverStep::Descend),
             "call_expression" => {
-                expression.field("function").is_some_and(|function| {
-                    match function.kind().as_ref() {
-                        "identifier" => self.factories.contains(function.text().as_ref()),
-                        "member_expression" => function.field("object").is_some_and(|object| {
-                            self.recognizes(&object)
-                                || (object.kind() == "identifier"
-                                    && self.namespaces.contains(object.text().as_ref())
-                                    && function.field("property").is_some_and(|property| {
-                                        FACTORIES.contains(&property.text().as_ref())
-                                    }))
-                        }),
-                        _ => false,
+                let Some(function) = expression.field("function") else {
+                    return ReceiverStep::Resolved(false);
+                };
+                match function.kind().as_ref() {
+                    "identifier" => {
+                        ReceiverStep::Resolved(self.factories.contains(function.text().as_ref()))
                     }
-                })
+                    "member_expression" => match function.field("object") {
+                        Some(object) if object.kind() == "identifier" => {
+                            let name = object.text();
+                            ReceiverStep::Resolved(
+                                self.schemas.contains(name.as_ref())
+                                    || (self.namespaces.contains(name.as_ref())
+                                        && function.field("property").is_some_and(|property| {
+                                            FACTORIES.contains(&property.text().as_ref())
+                                        })),
+                            )
+                        }
+                        Some(object) => ReceiverStep::Descend(object),
+                        None => ReceiverStep::Resolved(false),
+                    },
+                    _ => ReceiverStep::Resolved(false),
+                }
             }
-            _ => false,
+            _ => ReceiverStep::Resolved(false),
         }
     }
+}
+
+enum ReceiverStep<'source> {
+    Resolved(bool),
+    Descend(SyntaxNode<'source>),
 }
 
 fn contains_description(node: &SyntaxNode<'_>) -> bool {
@@ -156,7 +192,45 @@ fn scope_start(node: &SyntaxNode<'_>) -> usize {
         .map_or(0, |scope| scope.range().start)
 }
 
-pub(super) fn detect(root: &SyntaxNode<'_>) -> Vec<Documentation> {
+fn schema_description(
+    bindings: &ZodBindings,
+    metadata: &HashMap<(usize, String), usize>,
+    call: &SyntaxNode<'_>,
+) -> Result<Option<Documentation>> {
+    let Some(function) = call.field("function") else {
+        return Ok(None);
+    };
+    let Some(method) = function.field("property") else {
+        return Ok(None);
+    };
+    let matched = match method.text().as_ref() {
+        "describe" => true,
+        "meta" => call.field("arguments").is_some_and(|arguments| {
+            let mut values = arguments
+                .children()
+                .filter(|node| node.is_named() && node.kind() != "comment");
+            values.next().is_some_and(|value| {
+                values.next().is_none()
+                    && (contains_description(&value)
+                        || (value.kind() == "identifier"
+                            && metadata
+                                .get(&(scope_start(call), value.text().into_owned()))
+                                .is_some_and(|&offset| offset < call.range().start)))
+            })
+        }),
+        _ => false,
+    };
+    let Some(receiver) = function.field("object").filter(|_| matched) else {
+        return Ok(None);
+    };
+    Ok(bindings.recognizes(&receiver)?.then(|| Documentation {
+        span: call.range(),
+        kind: DocumentationKind::SchemaDescription,
+        rule_id: "schema-description-zod",
+    }))
+}
+
+pub(super) fn detect(root: &SyntaxNode<'_>) -> Result<Vec<Documentation>> {
     let mut bindings = ZodBindings::default();
     let mut schema_candidates = Vec::new();
     let mut metadata = HashMap::new();
@@ -190,7 +264,7 @@ pub(super) fn detect(root: &SyntaxNode<'_>) -> Vec<Documentation> {
     loop {
         let previous_count = bindings.schemas.len();
         for (name, value) in &schema_candidates {
-            if !bindings.schemas.contains(name) && bindings.recognizes(value) {
+            if !bindings.schemas.contains(name) && bindings.recognizes(value)? {
                 bindings.schemas.insert(name.clone());
             }
         }
@@ -199,32 +273,7 @@ pub(super) fn detect(root: &SyntaxNode<'_>) -> Vec<Documentation> {
         }
     }
     calls
-        .into_iter()
-        .filter_map(|call| {
-            let function = call.field("function")?;
-            let method = function.field("property")?;
-            let matched = match method.text().as_ref() {
-                "describe" => true,
-                "meta" => {
-                    let arguments = call.field("arguments")?;
-                    let mut values = arguments
-                        .children()
-                        .filter(|node| node.is_named() && node.kind() != "comment");
-                    let value = values.next()?;
-                    values.next().is_none()
-                        && (contains_description(&value)
-                            || (value.kind() == "identifier"
-                                && metadata
-                                    .get(&(scope_start(&call), value.text().into_owned()))
-                                    .is_some_and(|&offset| offset < call.range().start)))
-                }
-                _ => false,
-            };
-            (matched && bindings.recognizes(&function.field("object")?)).then(|| Documentation {
-                span: call.range(),
-                kind: DocumentationKind::SchemaDescription,
-                rule_id: "schema-description-zod",
-            })
-        })
+        .iter()
+        .filter_map(|call| schema_description(&bindings, &metadata, call).transpose())
         .collect()
 }
