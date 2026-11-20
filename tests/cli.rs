@@ -194,6 +194,128 @@ extra_directives = ["^# custom-tool:"]
     assert!(report.findings.is_empty());
 }
 
+/// Long enough to overflow a recursive receiver walk on the main thread in debug and release.
+const LONG_RECEIVER_LINKS: usize = 250_000;
+const ZOD_IMPORT: &str = "import { z } from \"zod\";\n";
+
+fn public_interface_project() -> tempfile::TempDir {
+    let project = tempdir().unwrap();
+    fs::write(
+        project.path().join("source-doc-lint.toml"),
+        "[public_interface]\ndirectories = [\"contracts\"]\n",
+    )
+    .unwrap();
+    project
+}
+
+fn scan_long_chain(relative: &str, prefix: &str, link: &str, suffix: &str) -> Output {
+    let project = public_interface_project();
+    let path = project.path().join(relative);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut source =
+        String::with_capacity(prefix.len() + link.len() * LONG_RECEIVER_LINKS + suffix.len());
+    source.push_str(prefix);
+    source.push_str(&link.repeat(LONG_RECEIVER_LINKS));
+    source.push_str(suffix);
+    fs::write(path, source).unwrap();
+    check(project.path(), &[relative])
+}
+
+fn assert_long_chains(
+    relative: &str,
+    zod_prefix: &str,
+    unrelated_prefix: &str,
+    link: &str,
+    suffix: &str,
+) {
+    let report = read_report(
+        &scan_long_chain(relative, &format!("{ZOD_IMPORT}{zod_prefix}"), link, suffix),
+        1,
+    );
+    assert!(report.error.is_none(), "{relative}: {:?}", report.error);
+    let rule_ids: Vec<_> = report
+        .findings
+        .iter()
+        .map(|finding| finding.rule_id.as_str())
+        .collect();
+    assert_eq!(rule_ids, ["schema-description-zod"], "{relative}");
+
+    let report = read_report(
+        &scan_long_chain(relative, unrelated_prefix, link, suffix),
+        0,
+    );
+    assert!(report.error.is_none(), "{relative}: {:?}", report.error);
+    assert!(report.findings.is_empty(), "{relative}");
+}
+
+#[test]
+fn long_property_chain_initializers_resolve_schema_aliases() {
+    assert_long_chains(
+        "src/property.ts",
+        "const schema = z.string()",
+        "const query = base",
+        ".a",
+        ";\nschema.describe(\"text\");\nquery.describe(\"text\");\n",
+    );
+}
+
+#[test]
+fn long_call_chain_initializers_resolve_schema_aliases() {
+    assert_long_chains(
+        "src/calls.ts",
+        "const schema = z.string()",
+        "const query = base",
+        ".optional()",
+        ";\nschema.describe(\"text\");\nquery.describe(\"text\");\n",
+    );
+}
+
+#[test]
+fn long_describe_receivers_are_resolved() {
+    assert_long_chains(
+        "src/describe.ts",
+        "z.string()",
+        "base",
+        ".a",
+        ".describe(\"text\");\n",
+    );
+}
+
+#[test]
+fn long_meta_receivers_are_resolved() {
+    assert_long_chains(
+        "src/meta.ts",
+        "z.string()",
+        "base",
+        ".a",
+        ".meta({ description: \"text\" });\n",
+    );
+}
+
+#[test]
+fn long_tsx_property_chain_initializers_resolve_schema_aliases() {
+    assert_long_chains(
+        "src/view.tsx",
+        "const schema = z.string()",
+        "const query = base",
+        ".a",
+        ";\nschema.describe(\"text\");\nexport const View = () => null;\n",
+    );
+}
+
+#[test]
+fn long_unrelated_metadata_call_chains_scan_cleanly() {
+    let output = scan_long_chain(
+        "src/registry.ts",
+        "const metadata = { description: \"text\" };\nregistry",
+        ".meta(metadata)",
+        ";\n",
+    );
+    let report = read_report(&output, 0);
+    assert!(report.error.is_none(), "{:?}", report.error);
+    assert!(report.findings.is_empty());
+}
+
 #[test]
 fn exposes_update_help_and_keeps_paths_named_update_scannable() {
     let project = tempdir().unwrap();
