@@ -101,29 +101,45 @@ impl ZodBindings {
         }
     }
 
+    /// Walks the chain with a loop because recursing once per link would let
+    /// a long member or call chain exhaust the stack.
     fn recognizes(&self, expression: &SyntaxNode<'_>) -> bool {
-        match expression.kind().as_ref() {
-            "identifier" => self.schemas.contains(expression.text().as_ref()),
-            "member_expression" => expression
-                .field("object")
-                .is_some_and(|object| self.recognizes(&object)),
-            "call_expression" => {
-                expression.field("function").is_some_and(|function| {
+        let mut current = expression.clone();
+        loop {
+            let next = match current.kind().as_ref() {
+                "identifier" => return self.schemas.contains(current.text().as_ref()),
+                "member_expression" => current.field("object"),
+                "call_expression" => {
+                    let Some(function) = current.field("function") else {
+                        return false;
+                    };
                     match function.kind().as_ref() {
-                        "identifier" => self.factories.contains(function.text().as_ref()),
-                        "member_expression" => function.field("object").is_some_and(|object| {
-                            self.recognizes(&object)
-                                || (object.kind() == "identifier"
-                                    && self.namespaces.contains(object.text().as_ref())
-                                    && function.field("property").is_some_and(|property| {
-                                        FACTORIES.contains(&property.text().as_ref())
-                                    }))
-                        }),
-                        _ => false,
+                        "identifier" => {
+                            return self.factories.contains(function.text().as_ref());
+                        }
+                        "member_expression" => {
+                            let Some(object) = function.field("object") else {
+                                return false;
+                            };
+                            if object.kind() == "identifier"
+                                && self.namespaces.contains(object.text().as_ref())
+                                && function.field("property").is_some_and(|property| {
+                                    FACTORIES.contains(&property.text().as_ref())
+                                })
+                            {
+                                return true;
+                            }
+                            Some(object)
+                        }
+                        _ => return false,
                     }
-                })
-            }
-            _ => false,
+                }
+                _ => return false,
+            };
+            let Some(next) = next else {
+                return false;
+            };
+            current = next;
         }
     }
 }
