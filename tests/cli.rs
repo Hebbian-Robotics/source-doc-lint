@@ -195,6 +195,38 @@ extra_directives = ["^# custom-tool:"]
 }
 
 #[test]
+fn scans_long_typescript_receivers_and_reports_only_the_zod_description() {
+    let project = tempdir().unwrap();
+    let root = project.path();
+    fs::write(
+        root.join("source-doc-lint.toml"),
+        include_str!("fixtures/policy.toml"),
+    )
+    .unwrap();
+
+    let zod_steps = ".optional()".repeat(512);
+    fs::write(
+        root.join("schema.ts"),
+        format!(
+            "import {{ z }} from 'zod';\nconst schema = z.string(){zod_steps};\nschema.describe('Title');\n"
+        ),
+    )
+    .unwrap();
+    let query_steps = ".filter(predicate)".repeat(512);
+    fs::write(
+        root.join("query.ts"),
+        format!("const query = source{query_steps};\nquery.describe('Query');\n"),
+    )
+    .unwrap();
+
+    let report = read_report(&check(root, &["schema.ts", "query.ts"]), 1);
+    assert!(report.error.is_none());
+    assert_eq!(report.findings.len(), 1);
+    assert_eq!(report.findings[0].file, "schema.ts");
+    assert_eq!(report.findings[0].rule_id, "schema-description-zod");
+}
+
+#[test]
 fn exposes_update_help_and_keeps_paths_named_update_scannable() {
     let project = tempdir().unwrap();
     let lint = env!("CARGO_BIN_EXE_source-doc-lint");
