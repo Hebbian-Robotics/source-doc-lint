@@ -4,6 +4,8 @@ use anyhow::{Context, Result};
 use self_update::backends::github::{Update, UpdateBuilder};
 use self_update::{ReleaseAsset, version::bump_is_greater};
 
+use crate::terminal_text::EscapedTerminalText;
+
 const NAME: &str = env!("CARGO_PKG_NAME");
 const INSTALLED_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -39,22 +41,23 @@ fn update_from_release(
     match check_for_update(updater, installed_version, archive_name)? {
         UpdateAvailability::Current { latest_version } => {
             println!(
-                "{NAME} {installed_version} is up to date (latest published: {latest_version})."
+                "{NAME} {installed_version} is up to date (latest published: {}).",
+                EscapedTerminalText(&latest_version)
             );
         }
         UpdateAvailability::Available(available) if check => {
             println!(
                 "{NAME} {} is available (installed: {installed_version}). Run {NAME} update to install it.",
-                available.version
+                EscapedTerminalText(&available.version)
             );
         }
         UpdateAvailability::Available(available) => {
             println!(
                 "Updating {NAME} from {installed_version} to {}.",
-                available.version
+                EscapedTerminalText(&available.version)
             );
             let installed = install_update(updater, available)?;
-            println!("Updated {NAME} to {installed}.");
+            println!("Updated {NAME} to {}.", EscapedTerminalText(&installed));
         }
     }
     Ok(())
