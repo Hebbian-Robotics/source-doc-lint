@@ -116,7 +116,8 @@ fn text_report_escapes_control_characters_in_policy_reason() {
     assert_text_contract(&output, 1);
     let stdout = normalize_newlines(&String::from_utf8(output.stdout).unwrap());
     let stderr = normalize_newlines(&String::from_utf8(output.stderr).unwrap());
-    let diagnostic = format!("./sample.py:1:1: {COMMENT_ACTION}");
+    let sample_path = Path::new(".").join("sample.py");
+    let diagnostic = format!("{}:1:1: {COMMENT_ACTION}", sample_path.display());
     assert_eq!(
         stdout,
         format!("{diagnostic}\n1 comment or documentation policy violations.\n")
@@ -232,7 +233,11 @@ fn json_report_keeps_control_characters_inside_structured_strings() {
     );
     let report: Value = serde_json::from_slice(&output.stdout).expect("JSON report");
     assert_eq!(report["reason"], reason);
-    assert_eq!(report["findings"][0]["file"], format!("./{file_name}"));
+    let expected_path = Path::new(".").join(file_name);
+    assert_eq!(
+        report["findings"][0]["file"],
+        expected_path.to_str().unwrap()
+    );
     assert_eq!(report["findings"][0]["action"], COMMENT_ACTION);
     assert!(report.get("error").is_none());
 }
