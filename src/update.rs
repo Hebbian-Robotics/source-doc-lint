@@ -38,6 +38,8 @@ fn update_from_release(
     archive_name: &str,
     check: bool,
 ) -> Result<()> {
+    // The dependency's own status lines print release metadata unescaped.
+    updater.show_output(false);
     match check_for_update(updater, installed_version, archive_name)? {
         UpdateAvailability::Current { latest_version } => {
             println!(
