@@ -1,6 +1,7 @@
 mod check;
 mod policy;
 mod syntax;
+mod terminal_text;
 mod update;
 
 use std::{
@@ -19,6 +20,7 @@ use crate::{
     check::Finding,
     policy::{Configuration, Policy},
     syntax::Language,
+    terminal_text::EscapedTerminalText,
 };
 
 #[derive(Parser)]
@@ -148,14 +150,14 @@ fn write_report(json: bool, report: Report<'_>) -> Result<ExitCode> {
             writeln!(
                 stdout,
                 "{}:{}:{}: {}",
-                finding.file.display(),
+                EscapedTerminalText(&finding.file.to_string_lossy()),
                 finding.range.start.line + 1,
                 finding.range.start.column + 1,
-                finding.action
+                EscapedTerminalText(finding.action)
             )?;
         }
         if let Some(error) = report.error {
-            eprintln!("{error}");
+            eprintln!("{}", EscapedTerminalText(&error));
         } else {
             writeln!(
                 stdout,
@@ -164,7 +166,7 @@ fn write_report(json: bool, report: Report<'_>) -> Result<ExitCode> {
             )?;
         }
         if let Some(reason) = report.reason {
-            eprintln!("{reason}");
+            eprintln!("{}", EscapedTerminalText(reason));
         }
     }
     Ok(ExitCode::from(exit))
@@ -208,7 +210,7 @@ fn main() -> ExitCode {
     match outcome {
         Ok(exit) => exit,
         Err(error) => {
-            eprintln!("{error:#}");
+            eprintln!("{}", EscapedTerminalText(&format!("{error:#}")));
             ExitCode::from(2)
         }
     }
